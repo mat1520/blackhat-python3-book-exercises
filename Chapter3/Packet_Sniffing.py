@@ -5,35 +5,53 @@ import sys
 
 def obtener_interfaces():
     """
-    Obtiene las interfaces de red disponibles en el sistema.
+    Obtiene las interfaces de red disponibles en el sistema usando comandos del sistema.
     """
-    import netifaces
+    import subprocess
     interfaces = []
-    for iface in netifaces.interfaces():
-        addrs = netifaces.ifaddresses(iface)
-        if netifaces.AF_INET in addrs:
-            for addr in addrs[netifaces.AF_INET]:
-                ip = addr['addr']
-                interfaces.append((iface, ip))
-    return interfaces
+    
+    try:
+        # Usar 'ip' command en Linux
+        resultado = subprocess.run(['ip', '-4', 'addr', 'show'], 
+                                  capture_output=True, text=True, check=True)
+        
+        iface_actual = None
+        for linea in resultado.stdout.split('\n'):
+            if not linea.startswith(' '):
+                # Nueva interfaz
+                partes = linea.split(':')
+                if len(partes) >= 2:
+                    iface_actual = partes[1].strip()
+            elif 'inet ' in linea and iface_actual:
+                # Extraer IP
+                partes = linea.strip().split()
+                if len(partes) >= 2:
+                    ip = partes[1].split('/')[0]
+                    interfaces.append((iface_actual, ip))
+        
+        return interfaces
+    except Exception as e:
+        # Fallback manual
+        return None
 
 def mostrar_interfaces():
     """
     Muestra las interfaces de red disponibles.
     """
-    try:
-        interfaces = obtener_interfaces()
+    interfaces = obtener_interfaces()
+    
+    if interfaces:
         print("\n[*] Interfaces de red disponibles:")
         for iface, ip in interfaces:
             print(f"    {iface}: {ip}")
         return interfaces
-    except ImportError:
-        print("[!] El módulo 'netifaces' no está instalado.")
-        print("[!] Instalalo con: pip install netifaces")
-        print("\n[*] Interfaces comunes en Linux:")
+    else:
+        print("\n[*] No se pudieron detectar interfaces automáticamente")
+        print("[*] Interfaces comunes en Linux:")
         print("    lo: 127.0.0.1 (loopback)")
         print("    eth0, enp0s3: IP de tu red local")
         print("    wlan0, wlp2s0: IP de tu WiFi")
+        print("\n[*] Usa 'ip addr' para ver tus interfaces")
         return None
 
 def parsear_cabecera_ip(datos):
