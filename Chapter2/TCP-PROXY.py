@@ -27,7 +27,7 @@ def recibir_datos(conexion):
     Recibe datos de un socket hasta que no haya más disponibles o se alcance un tiempo de espera.
     """
     buffer = b""
-    conexion.settimeout(2)
+    conexion.settimeout(5)
 
     try:
         while True:
@@ -37,6 +37,8 @@ def recibir_datos(conexion):
             buffer += datos
     except socket.timeout:
         pass
+    except Exception as e:
+        print(f"[!] Error al recibir datos: {e}")
 
     return buffer
 
@@ -62,50 +64,65 @@ def manejar_proxy(socket_cliente, servidor_remoto, puerto_remoto, recibir_primer
     """
     Gestiona la comunicación entre el cliente local y el servidor remoto.
     """
-    # Conexión al servidor remoto
-    socket_remoto = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socket_remoto.connect((servidor_remoto, puerto_remoto))
+    try:
+        # Conexión al servidor remoto
+        socket_remoto = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        socket_remoto.connect((servidor_remoto, puerto_remoto))
+        print(f"[*] Conectado al servidor remoto {servidor_remoto}:{puerto_remoto}")
 
-    # Si se debe recibir datos primero del servidor remoto
-    if recibir_primero:
-        buffer_remoto = recibir_datos(socket_remoto)
-        if buffer_remoto:
-            print("[<==] Datos recibidos del servidor remoto:")
-            volcado_hexadecimal(buffer_remoto)
+        # Si se debe recibir datos primero del servidor remoto
+        if recibir_primero:
+            buffer_remoto = recibir_datos(socket_remoto)
+            if buffer_remoto:
+                print("[<==] Datos recibidos del servidor remoto:")
+                volcado_hexadecimal(buffer_remoto)
 
-            # Procesar la respuesta antes de enviarla al cliente
-            buffer_remoto = procesar_respuesta(buffer_remoto)
-            socket_cliente.send(buffer_remoto)
+                # Procesar la respuesta antes de enviarla al cliente
+                buffer_remoto = procesar_respuesta(buffer_remoto)
+                socket_cliente.send(buffer_remoto)
 
-    while True:
-        # Recibir datos del cliente local
-        buffer_local = recibir_datos(socket_cliente)
-        if buffer_local:
-            print(f"[==>] Recibidos {len(buffer_local)} bytes del cliente local")
-            volcado_hexadecimal(buffer_local)
+        while True:
+            # Recibir datos del cliente local
+            buffer_local = recibir_datos(socket_cliente)
+            if buffer_local:
+                print(f"[==>] Recibidos {len(buffer_local)} bytes del cliente local")
+                volcado_hexadecimal(buffer_local)
 
-            # Procesar la solicitud antes de enviarla al servidor remoto
-            buffer_local = procesar_solicitud(buffer_local)
-            socket_remoto.send(buffer_local)
-            print("[==>] Enviados al servidor remoto")
+                # Procesar la solicitud antes de enviarla al servidor remoto
+                buffer_local = procesar_solicitud(buffer_local)
+                socket_remoto.send(buffer_local)
+                print("[==>] Enviados al servidor remoto")
 
-        # Recibir datos del servidor remoto
-        buffer_remoto = recibir_datos(socket_remoto)
-        if buffer_remoto:
-            print(f"[<==] Recibidos {len(buffer_remoto)} bytes del servidor remoto")
-            volcado_hexadecimal(buffer_remoto)
+                # Recibir la respuesta del servidor remoto
+                buffer_remoto = recibir_datos(socket_remoto)
+                if buffer_remoto:
+                    print(f"[<==] Recibidos {len(buffer_remoto)} bytes del servidor remoto")
+                    volcado_hexadecimal(buffer_remoto)
 
-            # Procesar la respuesta antes de enviarla al cliente local
-            buffer_remoto = procesar_respuesta(buffer_remoto)
-            socket_cliente.send(buffer_remoto)
-            print("[<==] Enviados al cliente local")
+                    # Procesar la respuesta antes de enviarla al cliente local
+                    buffer_remoto = procesar_respuesta(buffer_remoto)
+                    socket_cliente.send(buffer_remoto)
+                    print("[<==] Enviados al cliente local")
+                else:
+                    # El servidor remoto cerró la conexión
+                    break
+            else:
+                # El cliente local cerró la conexión
+                break
 
-        # Cerrar conexiones si no hay más datos
-        if not buffer_local or not buffer_remoto:
+    except Exception as e:
+        print(f"[!!] Error en el proxy: {e}")
+    finally:
+        # Cerrar conexiones
+        try:
             socket_cliente.close()
+        except:
+            pass
+        try:
             socket_remoto.close()
-            print("[*] No hay más datos. Conexiones cerradas.")
-            break
+        except:
+            pass
+        print("[*] Conexiones cerradas.")
 
 
 # Función para iniciar el servidor proxy
@@ -114,6 +131,9 @@ def iniciar_servidor(host_local, puerto_local, host_remoto, puerto_remoto, recib
     Configura un servidor que escucha conexiones y las redirige al servidor remoto.
     """
     servidor = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    
+    # Permitir reutilizar el puerto inmediatamente
+    servidor.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
     try:
         servidor.bind((host_local, puerto_local))
@@ -124,15 +144,25 @@ def iniciar_servidor(host_local, puerto_local, host_remoto, puerto_remoto, recib
         sys.exit(1)
 
     print(f"[*] Escuchando en {host_local}:{puerto_local}")
+    print(f"[*] Redirigiendo a {host_remoto}:{puerto_remoto}")
     servidor.listen(5)
 
-    while True:
-        cliente, direccion = servidor.accept()
-        print(f"[==>] Conexión entrante desde {direccion[0]}:{direccion[1]}")
+    try:
+        while True:
+            cliente, direccion = servidor.accept()
+            print(f"\n[==>] Conexión entrante desde {direccion[0]}:{direccion[1]}")
 
-        # Crear un hilo para manejar la conexión
-        hilo_proxy = threading.Thread(target=manejar_proxy, args=(cliente, host_remoto, puerto_remoto, recibir_primero))
-        hilo_proxy.start()
+            # Crear un hilo daemon para manejar la conexión
+            hilo_proxy = threading.Thread(
+                target=manejar_proxy, 
+                args=(cliente, host_remoto, puerto_remoto, recibir_primero)
+            )
+            hilo_proxy.daemon = True
+            hilo_proxy.start()
+    except KeyboardInterrupt:
+        print("\n[*] Cerrando el servidor proxy...")
+        servidor.close()
+        sys.exit(0)
 
 
 # Función principal
