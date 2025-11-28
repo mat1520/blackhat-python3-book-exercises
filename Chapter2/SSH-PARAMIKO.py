@@ -5,6 +5,8 @@ def sshComands(ip, user, passwd, command):
     try:
         # Crear un cliente SSH
         client = paramiko.SSHClient()
+        
+        # Esta línea evita el error de "authenticity of host" aceptando la llave automáticamente
         client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         
         # Conectar al servidor SSH
@@ -29,3 +31,11 @@ def sshComands(ip, user, passwd, command):
         # Cerrar la conexión SSH
         client.close()
         print(f"[+] Conexión cerrada con {ip}")
+
+# Ejecución con tus credenciales probadas
+if __name__ == "__main__":
+    input_ip = input("Ingrese la IP del servidor SSH: ")
+    input_user = input("Ingrese el nombre de usuario: ")
+    input_passwd = input("Ingrese la contraseña: ")
+    input_command = input("Ingrese el comando a ejecutar: ")
+    sshComands(input_ip, input_user, input_passwd, input_command)
