@@ -41,4 +41,10 @@ Refer to the file: `TCP-PROXY.py`
 SSH with Paramiko
 Paramiko is a Python library that provides an interface for working with SSH connections. Below is an example of how to create an SSH client using Paramiko.
 
+For to use Paramiko, you need to install it first. You can install it using pip:
+
+```bash
+pip install paramiko
+```
+
 Refer to the file: `SSH-PARAMIKO.py`
