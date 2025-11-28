@@ -32,7 +32,8 @@ For example, to connect to a server at IP address `0.0.0.0` and port `9999`, use
 ```bash
 nc 0.0.0.0 9999
 ```
+
 TCP-PROXY
 A TCP proxy is a server that acts as an intermediary for TCP connections between clients and servers. Below is an example of a simple TCP proxy implemented in Python using the `socket` library.
 
-Refer to the file: `TCP-PROXY.py`
+Refer to the file: `TCP-PROXY.py`º
